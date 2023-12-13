@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import MinMaxScaler
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
@@ -8,11 +7,11 @@ from sklearn.metrics import mean_absolute_error, mean_absolute_percentage_error,
 from tqdm import tqdm
 
 
-# USE_CUDA = torch.cuda.is_available()
-# print(USE_CUDA)
-#
-# device = torch.device('cuda:0' if USE_CUDA else 'cpu')
-# print('학습을 진행하는 기기:',device)
+USE_CUDA = torch.cuda.is_available()
+print(USE_CUDA)
+
+device = torch.device('cuda:0' if USE_CUDA else 'cpu')
+print('학습을 진행하는 기기:',device)
 
 data=pd.read_csv("AI_Lec_23_final_stocks.csv")
 
@@ -34,10 +33,10 @@ data_df=csv_to_arr("AI_Lec_23_final_stocks.csv")
 # Create sequences and labels for training
 seq_length = 50
 X, y = [], []
+tmp=data_df.shape[1] - seq_length-1
 for stock_idx in tqdm(range(data_df.shape[0])):
-    for day_idx in range(data_df.shape[1] - seq_length):
-        X.append(np.array(data_df[stock_idx][day_idx:day_idx + seq_length]))
-        y.append(np.array(data_df[stock_idx][day_idx + seq_length]))
+    X.append(np.array(data_df[stock_idx][tmp:tmp + seq_length]))
+    y.append(np.array(data_df[stock_idx][tmp + seq_length]))
 
 X, y = np.array(X), np.array(y)
 
@@ -80,7 +79,7 @@ input_size = seq_length
 hidden_size = 128
 output_size = 1
 learning_rate = 0.001
-num_epochs = 20
+num_epochs = 10
 batch_size = 64
 
 # Create data loaders
@@ -119,3 +118,34 @@ mae = mean_absolute_error(y_test, y_pred)
 print(f"Mean Absolute Error (MAE): {mae:.2f}")
 mape = mean_absolute_percentage_error(y_test, y_pred) * 100
 print(f"Mean Absolute Percentage Error (MAPE): {mape:.2f}%")
+
+try:
+    torch.save(model.state_dict(), './model.pth')
+except:
+    print("failed to save model")
+else:
+    print("successed to save model as ./model.pth")
+
+# get real prediction values(3001~3020)
+X = []
+tmp=data_df.shape[1] - seq_length
+for stock_idx in tqdm(range(data_df.shape[0])):
+    X.append(np.array(data_df[stock_idx][tmp:tmp + seq_length]))
+X = np.array(X)
+
+y_pred=[]
+final_result = [[] for idx in range(100)]
+with torch.no_grad():
+    for idx in range(20):
+        if len(y_pred)!=0:
+            for sub_idx in range(len(X)):
+                tmp_np=np.delete(X[sub_idx], 0)
+                tmp_np=np.append(tmp_np, y_pred[sub_idx][0])
+                X[sub_idx]=tmp_np
+        X_test_tensor = torch.tensor(X, dtype=torch.float32)
+        X_test_tensor = X_test_tensor.reshape(X_test_tensor.shape[0], X_test_tensor.shape[1], 1)
+        y_pred = model(X_test_tensor).numpy()
+        for result_idx in range(100):
+            final_result[result_idx].append(y_pred[result_idx][0])
+
+print("final result: {}".format(final_result))
